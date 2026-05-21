@@ -1,0 +1,146 @@
+name: Sync & Publish Chrome Extensions
+
+on:
+  schedule:
+    - cron: 0 15 * * *
+  workflow_dispatch:
+
+jobs:
+  check-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install Dependencies
+        run: |
+          npm install -g chrome-webstore-upload-cli
+          sudo apt-get install -y jq zip curl
+
+      # ========================================
+      # Tree-Style-History
+      # ========================================
+      - name: Process Tree-Style-History
+        env:
+          UPSTREAM_REPO: 'https://github.com/tumuyan/Tree-Style-History.git'
+          EXT_ID: ${{ secrets.EXT1_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+        run: |
+          echo "==== 克隆上游仓库 ===="
+          git clone $UPSTREAM_REPO target-ext1
+          UPSTREAM_VER=$(jq -r '.version' target-ext1/chrome/manifest.json)
+          echo "Upstream version: $UPSTREAM_VER"
+
+          echo "==== 获取 Google API Access Token ===="
+          ACCESS_TOKEN=$(curl -s -X POST \
+            -d "client_id=$CLIENT_ID" \
+            -d "client_secret=$CLIENT_SECRET" \
+            -d "refresh_token=$REFRESH_TOKEN" \
+            -d "grant_type=refresh_token" \
+            https://oauth2.googleapis.com/token | jq -r .access_token)
+
+          if [ "$ACCESS_TOKEN" == "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "Error: 无法获取 Access Token，请检查变量是否正确配置。"
+            exit 1
+          fi
+
+          echo "==== 获取商店当前审核中/已提交的版本 ===="
+          ITEM_INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "x-goog-api-version: 2" \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/$EXT_ID?projection=DRAFT")
+
+          DRAFT_VER=$(echo "$ITEM_INFO" | jq -r '.crxVersion // "none"')
+          echo "Draft version in Chrome Store: $DRAFT_VER"
+
+          echo "==== 对比版本 ===="
+          if [ "$UPSTREAM_VER" == "$DRAFT_VER" ]; then
+            echo "版本 $UPSTREAM_VER 已经在审核中或已发布，跳过推送。"
+          else
+            echo "检测到新版本 $UPSTREAM_VER，准备打包上传..."
+
+            cd target-ext1/chrome
+            jq 'del(.update_url)' manifest.json > tmp.json && mv tmp.json manifest.json
+            echo "==== 已清除 manifest.json 中的 update_url 字段 ===="
+            zip -rq ../../ext1.zip .
+            cd ../..
+
+            # 上传并自动发布
+            chrome-webstore-upload upload \
+              --source ext1.zip \
+              --extension-id $EXT_ID \
+              --auto-publish
+
+            echo "==== 发送通知 ===="
+            if [[ $SENDKEY =~ ^sctp([0-9]+)t ]]; then
+              UID_VAL="${BASH_REMATCH[1]}"
+              curl -X POST "https://${UID_VAL}.push.ft07.com/send/${SENDKEY}.send" \
+                   -d "title=Tree-Style-History已提交: v$UPSTREAM_VER" \
+                   -d "desp=Tree-Style-History (v$UPSTREAM_VER) 已成功推送到 Chrome Web Store，目前处于排队审核状态。"
+            else
+              echo "Warning: SendKey 格式不匹配 sctp{uid}t，无法发送 Server酱 通知。"
+            fi
+          fi
+
+      # ========================================
+      # TabulaBili
+      # ========================================
+      - name: Process TabulaBili
+        env:
+          UPSTREAM_REPO: 'https://github.com/wangdaodaodao/TabulaBili.git'
+          EXT_ID: ${{ secrets.EXT2_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+        run: |
+          echo "==== 克隆上游仓库 ===="
+          git clone $UPSTREAM_REPO target-ext2
+          UPSTREAM_VER=$(jq -r '.version' target-ext2/manifest.json)
+          echo "Upstream version: $UPSTREAM_VER"
+
+          ACCESS_TOKEN=$(curl -s -X POST \
+            -d "client_id=$CLIENT_ID" \
+            -d "client_secret=$CLIENT_SECRET" \
+            -d "refresh_token=$REFRESH_TOKEN" \
+            -d "grant_type=refresh_token" \
+            https://oauth2.googleapis.com/token | jq -r .access_token)
+
+          ITEM_INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "x-goog-api-version: 2" \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/$EXT_ID?projection=DRAFT")
+
+          DRAFT_VER=$(echo "$ITEM_INFO" | jq -r '.crxVersion // "none"')
+          echo "Draft version in Chrome Store: $DRAFT_VER"
+
+          if [ "$UPSTREAM_VER" == "$DRAFT_VER" ]; then
+            echo "版本 $UPSTREAM_VER 已经在审核中或已发布，跳过推送。"
+          else
+            echo "检测到新版本 $UPSTREAM_VER，准备打包上传..."
+
+            cd target-ext2
+            zip -rq ../ext2.zip . -x "*.git*" ".gitignore" "README.md" "README_zh.md"
+            cd ..
+
+            # 上传并自动发布
+            chrome-webstore-upload upload \
+              --source ext2.zip \
+              --extension-id $EXT_ID \
+              --auto-publish
+
+            echo "==== 发送通知 ===="
+            if [[ $SENDKEY =~ ^sctp([0-9]+)t ]]; then
+              UID_VAL="${BASH_REMATCH[1]}"
+              curl -X POST "https://${UID_VAL}.push.ft07.com/send/${SENDKEY}.send" \
+                   -d "title=TabulaBili已提交: v$UPSTREAM_VER" \
+                   -d "desp=TabulaBili (v$UPSTREAM_VER) 已成功推送到 Chrome Web Store，目前处于排队审核状态。"
+            else
+              echo "Warning: SendKey 格式不匹配 sctp{uid}t，无法发送 Server酱 通知。"
+            fi
+          fi
