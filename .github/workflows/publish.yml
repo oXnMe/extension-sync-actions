@@ -8,6 +8,8 @@ on:
 jobs:
   check-and-publish:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -144,3 +146,13 @@ jobs:
               echo "Warning: SendKey 格式不匹配 sctp{uid}t，无法发送 Server酱 通知。"
             fi
           fi
+
+      # ========================================
+      # Clear
+      # ========================================
+      - name: Remove old workflow runs
+        uses: ophub/delete-releases-workflows@main
+        with:
+          delete_workflows: true
+          workflows_keep_day: 3
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
