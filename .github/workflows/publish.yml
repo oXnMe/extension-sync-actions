@@ -5,12 +5,17 @@ on:
     - cron: 0 15 * * *
   workflow_dispatch:
 
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   check-and-publish:
     runs-on: ubuntu-latest
-    permissions:
-      actions: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -20,12 +25,17 @@ jobs:
         run: |
           npm install -g chrome-webstore-upload-cli
           sudo apt-get install -y jq zip curl
+          mkdir -p .sync-status
 
       # ========================================
       # Tree-Style-History
       # ========================================
       - name: Process Tree-Style-History
         env:
+          EXT_NAME: 'Tree Style History'
+          UPSTREAM_URL: 'https://github.com/tumuyan/Tree-Style-History'
+          STORE_URL: 'https://chromewebstore.google.com/detail/khcenbpnhbeplojhaolbpldmoppicold'
+          ROW_FILE: '.sync-status/01-ext1.md'
           UPSTREAM_REPO: 'https://github.com/tumuyan/Tree-Style-History.git'
           EXT_ID: ${{ secrets.EXT1_ID }}
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
@@ -34,6 +44,10 @@ jobs:
           PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
           SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
         run: |
+          write_row() {
+            echo "| [$EXT_NAME]($STORE_URL) | \`${UPSTREAM_VER:-未知}\` | \`${PUBLISHED_VER:-未知}\` | \`${DRAFT_VER:-未知}\` | $1 |" > "$ROW_FILE"
+          }
+
           echo "==== 克隆上游仓库 ===="
           git clone $UPSTREAM_REPO target-ext1
           UPSTREAM_VER=$(jq -r '.version' target-ext1/chrome/manifest.json)
@@ -49,6 +63,7 @@ jobs:
 
           if [ "$ACCESS_TOKEN" == "null" ] || [ -z "$ACCESS_TOKEN" ]; then
             echo "Error: 无法获取 Access Token，请检查变量是否正确配置。"
+            write_row "❌ 获取 Token 失败"
             exit 1
           fi
 
@@ -56,13 +71,23 @@ jobs:
           ITEM_INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "x-goog-api-version: 2" \
             "https://www.googleapis.com/chromewebstore/v1.1/items/$EXT_ID?projection=DRAFT")
-
           DRAFT_VER=$(echo "$ITEM_INFO" | jq -r '.crxVersion // "none"')
           echo "Draft version in Chrome Store: $DRAFT_VER"
 
+          echo "==== 获取商店已发布的版本 ===="
+          PUB_INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "x-goog-api-version: 2" \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/$EXT_ID?projection=PUBLISHED")
+          PUBLISHED_VER=$(echo "$PUB_INFO" | jq -r '.crxVersion // "none"')
+          echo "Published version in Chrome Store: $PUBLISHED_VER"
+
           echo "==== 对比版本 ===="
-          if [ "$UPSTREAM_VER" == "$DRAFT_VER" ]; then
-            echo "版本 $UPSTREAM_VER 已经在审核中或已发布，跳过推送。"
+          if [ "$UPSTREAM_VER" == "$PUBLISHED_VER" ]; then
+            echo "版本 $UPSTREAM_VER 已发布，跳过推送。"
+            write_row "✅ 已发布最新版"
+          elif [ "$UPSTREAM_VER" == "$DRAFT_VER" ]; then
+            echo "版本 $UPSTREAM_VER 已提交，正在审核中，跳过推送。"
+            write_row "🕑 审核中"
           else
             echo "检测到新版本 $UPSTREAM_VER，准备打包上传..."
 
@@ -73,19 +98,24 @@ jobs:
             cd ../..
 
             # 上传并自动发布
-            chrome-webstore-upload upload \
+            if chrome-webstore-upload upload \
               --source ext1.zip \
               --extension-id $EXT_ID \
-              --auto-publish
+              --auto-publish; then
+              write_row "🚀 本次已提交审核"
 
-            echo "==== 发送通知 ===="
-            if [[ $SENDKEY =~ ^sctp([0-9]+)t ]]; then
-              UID_VAL="${BASH_REMATCH[1]}"
-              curl -X POST "https://${UID_VAL}.push.ft07.com/send/${SENDKEY}.send" \
-                   -d "title=Tree-Style-History已提交: v$UPSTREAM_VER" \
-                   -d "desp=Tree-Style-History (v$UPSTREAM_VER) 已成功推送到 Chrome Web Store，目前处于排队审核状态。"
+              echo "==== 发送通知 ===="
+              if [[ $SENDKEY =~ ^sctp([0-9]+)t ]]; then
+                UID_VAL="${BASH_REMATCH[1]}"
+                curl -X POST "https://${UID_VAL}.push.ft07.com/send/${SENDKEY}.send" \
+                     -d "title=Tree-Style-History已提交: v$UPSTREAM_VER" \
+                     -d "desp=Tree-Style-History (v$UPSTREAM_VER) 已成功推送到 Chrome Web Store，目前处于排队审核状态。"
+              else
+                echo "Warning: SendKey 格式不匹配 sctp{uid}t，无法发送 Server酱 通知。"
+              fi
             else
-              echo "Warning: SendKey 格式不匹配 sctp{uid}t，无法发送 Server酱 通知。"
+              write_row "❌ 提交失败"
+              exit 1
             fi
           fi
 
@@ -93,7 +123,12 @@ jobs:
       # TabulaBili
       # ========================================
       - name: Process TabulaBili
+        if: ${{ !cancelled() }}
         env:
+          EXT_NAME: 'TabulaBili (初见哔哩)'
+          UPSTREAM_URL: 'https://github.com/wangdaodaodao/TabulaBili'
+          STORE_URL: 'https://chromewebstore.google.com/detail/hjknablinpkpajdhjboogodgkpggffog'
+          ROW_FILE: '.sync-status/02-ext2.md'
           UPSTREAM_REPO: 'https://github.com/wangdaodaodao/TabulaBili.git'
           EXT_ID: ${{ secrets.EXT2_ID }}
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
@@ -102,6 +137,10 @@ jobs:
           PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
           SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
         run: |
+          write_row() {
+            echo "| [$EXT_NAME]($STORE_URL) | \`${UPSTREAM_VER:-未知}\` | \`${PUBLISHED_VER:-未知}\` | \`${DRAFT_VER:-未知}\` | $1 |" > "$ROW_FILE"
+          }
+
           echo "==== 克隆上游仓库 ===="
           git clone $UPSTREAM_REPO target-ext2
           UPSTREAM_VER=$(jq -r '.version' target-ext2/manifest.json)
@@ -114,15 +153,30 @@ jobs:
             -d "grant_type=refresh_token" \
             https://oauth2.googleapis.com/token | jq -r .access_token)
 
+          if [ "$ACCESS_TOKEN" == "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "Error: 无法获取 Access Token，请检查变量是否正确配置。"
+            write_row "❌ 获取 Token 失败"
+            exit 1
+          fi
+
           ITEM_INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "x-goog-api-version: 2" \
             "https://www.googleapis.com/chromewebstore/v1.1/items/$EXT_ID?projection=DRAFT")
-
           DRAFT_VER=$(echo "$ITEM_INFO" | jq -r '.crxVersion // "none"')
           echo "Draft version in Chrome Store: $DRAFT_VER"
 
-          if [ "$UPSTREAM_VER" == "$DRAFT_VER" ]; then
-            echo "版本 $UPSTREAM_VER 已经在审核中或已发布，跳过推送。"
+          PUB_INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "x-goog-api-version: 2" \
+            "https://www.googleapis.com/chromewebstore/v1.1/items/$EXT_ID?projection=PUBLISHED")
+          PUBLISHED_VER=$(echo "$PUB_INFO" | jq -r '.crxVersion // "none"')
+          echo "Published version in Chrome Store: $PUBLISHED_VER"
+
+          if [ "$UPSTREAM_VER" == "$PUBLISHED_VER" ]; then
+            echo "版本 $UPSTREAM_VER 已发布，跳过推送。"
+            write_row "✅ 已发布最新版"
+          elif [ "$UPSTREAM_VER" == "$DRAFT_VER" ]; then
+            echo "版本 $UPSTREAM_VER 已提交，正在审核中，跳过推送。"
+            write_row "🕑 审核中"
           else
             echo "检测到新版本 $UPSTREAM_VER，准备打包上传..."
 
@@ -131,20 +185,69 @@ jobs:
             cd ..
 
             # 上传并自动发布
-            chrome-webstore-upload upload \
+            if chrome-webstore-upload upload \
               --source ext2.zip \
               --extension-id $EXT_ID \
-              --auto-publish
+              --auto-publish; then
+              write_row "🚀 本次已提交审核"
 
-            echo "==== 发送通知 ===="
-            if [[ $SENDKEY =~ ^sctp([0-9]+)t ]]; then
-              UID_VAL="${BASH_REMATCH[1]}"
-              curl -X POST "https://${UID_VAL}.push.ft07.com/send/${SENDKEY}.send" \
-                   -d "title=TabulaBili已提交: v$UPSTREAM_VER" \
-                   -d "desp=TabulaBili (v$UPSTREAM_VER) 已成功推送到 Chrome Web Store，目前处于排队审核状态。"
+              echo "==== 发送通知 ===="
+              if [[ $SENDKEY =~ ^sctp([0-9]+)t ]]; then
+                UID_VAL="${BASH_REMATCH[1]}"
+                curl -X POST "https://${UID_VAL}.push.ft07.com/send/${SENDKEY}.send" \
+                     -d "title=TabulaBili已提交: v$UPSTREAM_VER" \
+                     -d "desp=TabulaBili (v$UPSTREAM_VER) 已成功推送到 Chrome Web Store，目前处于排队审核状态。"
+              else
+                echo "Warning: SendKey 格式不匹配 sctp{uid}t，无法发送 Server酱 通知。"
+              fi
             else
-              echo "Warning: SendKey 格式不匹配 sctp{uid}t，无法发送 Server酱 通知。"
+              write_row "❌ 提交失败"
+              exit 1
             fi
+          fi
+
+      # ========================================
+      # 将同步状态写回 README.md
+      # ========================================
+      - name: Update README Sync Status
+        if: ${{ !cancelled() }}
+        run: |
+          echo "==== 生成状态区块 ===="
+          {
+            echo '<!-- SYNC_STATUS_START -->'
+            echo "> 🕐 最后检查时间：$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M') (UTC+8)"
+            echo ''
+            echo '| 扩展名称 | 上游版本 | 商店已发布版本 | 商店提交版本 | 状态 |'
+            echo '| :--- | :--- | :--- | :--- | :--- |'
+            cat .sync-status/*.md 2>/dev/null || echo '| - | - | - | - | 暂无数据 |'
+            echo '<!-- SYNC_STATUS_END -->'
+          } > /tmp/status_block.md
+
+          # README 中若无标记区块则自动追加一个
+          if ! grep -q 'SYNC_STATUS_START' README.md; then
+            printf '\n## 📊 同步状态\n\n<!-- SYNC_STATUS_START -->\n<!-- SYNC_STATUS_END -->\n' >> README.md
+          fi
+
+          echo "==== 替换 README 标记区块 ===="
+          awk '
+            /<!-- SYNC_STATUS_START -->/ {
+              while ((getline line < "/tmp/status_block.md") > 0) print line
+              skip = 1; next
+            }
+            /<!-- SYNC_STATUS_END -->/ { skip = 0; next }
+            !skip { print }
+          ' README.md > /tmp/README.new && mv /tmp/README.new README.md
+
+          echo "==== 提交变更（忽略仅时间戳变化）===="
+          if git diff -I '最后检查时间' --quiet README.md; then
+            echo "版本状态无实质变化，跳过提交。"
+            git checkout -- README.md
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "chore: 更新扩展同步状态 [skip ci]"
+            git push
           fi
 
       # ========================================

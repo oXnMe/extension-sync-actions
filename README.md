@@ -12,3 +12,10 @@
 | **TabulaBili (初见哔哩)** | [wangdaodaodao/TabulaBili](https://github.com/wangdaodaodao/TabulaBili) | [Chrome Web Store](https://chromewebstore.google.com/detail/hjknablinpkpajdhjboogodgkpggffog) |
 
 > ⚠️ **声明**：Tree Style History已获得原作者的授权，TabulaBili原作者并未限制他人上架，只需保留信息。
+
+## 📊 同步状态
+
+<!-- SYNC_STATUS_START -->
+_等待 workflow 首次运行后自动生成..._
+<!-- SYNC_STATUS_END -->
+
