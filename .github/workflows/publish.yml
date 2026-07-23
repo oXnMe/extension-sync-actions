@@ -88,8 +88,21 @@ jobs:
             echo "版本 $UPSTREAM_VER 已发布，跳过推送。"
             write_row "✅ 已发布最新版"
           elif [ "$UPSTREAM_VER" == "$DRAFT_VER" ]; then
-            echo "版本 $UPSTREAM_VER 已提交，正在审核中，跳过推送。"
-            write_row "🕑 审核中"
+            echo "草稿已是最新版但未发布，尝试补交审核..."
+            if PUBLISH_OUT=$(chrome-webstore-upload publish --extension-id $EXT_ID 2>&1); then
+              echo "$PUBLISH_OUT"
+              echo "草稿已成功补交审核。"
+              write_row "🚀 草稿已补交审核"
+            else
+              echo "$PUBLISH_OUT"
+              if echo "$PUBLISH_OUT" | grep -qiE 'pending|in.?review|under.?review|already'; then
+                echo "该版本已在审核队列中，无需操作。"
+                write_row "🕑 审核中"
+              else
+                echo "Warning: 草稿存在但补交审核失败，可能需到开发者后台补充隐私/权限声明后手动提交。"
+                write_row "⚠️ 草稿未提审，需手动处理"
+              fi
+            fi
           else
             echo "检测到新版本 $UPSTREAM_VER，准备打包上传..."
 
@@ -181,8 +194,21 @@ jobs:
             echo "版本 $UPSTREAM_VER 已发布，跳过推送。"
             write_row "✅ 已发布最新版"
           elif [ "$UPSTREAM_VER" == "$DRAFT_VER" ]; then
-            echo "版本 $UPSTREAM_VER 已提交，正在审核中，跳过推送。"
-            write_row "🕑 审核中"
+            echo "草稿已是最新版但未发布，尝试补交审核..."
+            if PUBLISH_OUT=$(chrome-webstore-upload publish --extension-id $EXT_ID 2>&1); then
+              echo "$PUBLISH_OUT"
+              echo "草稿已成功补交审核。"
+              write_row "🚀 草稿已补交审核"
+            else
+              echo "$PUBLISH_OUT"
+              if echo "$PUBLISH_OUT" | grep -qiE 'pending|in.?review|under.?review|already'; then
+                echo "该版本已在审核队列中，无需操作。"
+                write_row "🕑 审核中"
+              else
+                echo "Warning: 草稿存在但补交审核失败，可能需到开发者后台补充隐私/权限声明后手动提交。"
+                write_row "⚠️ 草稿未提审，需手动处理"
+              fi
+            fi
           else
             echo "检测到新版本 $UPSTREAM_VER，准备打包上传..."
 
