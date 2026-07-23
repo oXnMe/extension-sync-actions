@@ -16,6 +16,11 @@
 ## 📊 同步状态
 
 <!-- SYNC_STATUS_START -->
-_等待 workflow 首次运行后自动生成..._
+> 🕐 最后检查时间：2026-07-23 21:15 (UTC+8)
+
+| 扩展名称 | 上游版本 | 商店已发布版本 | 商店提交版本 | 状态 |
+| :--- | :--- | :--- | :--- | :--- |
+| [Tree Style History](https://chromewebstore.google.com/detail/khcenbpnhbeplojhaolbpldmoppicold) | `3.3.1` | `none` | `3.3.1` | 🕑 审核中 |
+| [TabulaBili (初见哔哩)](https://chromewebstore.google.com/detail/hjknablinpkpajdhjboogodgkpggffog) | `1.0` | `none` | `1.0` | 🕑 审核中 |
 <!-- SYNC_STATUS_END -->
 
