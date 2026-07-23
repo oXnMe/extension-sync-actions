@@ -75,10 +75,12 @@ jobs:
           echo "Draft version in Chrome Store: $DRAFT_VER"
 
           echo "==== 获取商店已发布的版本 ===="
-          PUB_INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "x-goog-api-version: 2" \
-            "https://www.googleapis.com/chromewebstore/v1.1/items/$EXT_ID?projection=PUBLISHED")
-          PUBLISHED_VER=$(echo "$PUB_INFO" | jq -r '.crxVersion // "none"')
+          PUBLISHED_VER=$(curl -sL -H "Accept-Language: en-US,en;q=0.9" \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+            "https://chromewebstore.google.com/detail/$EXT_ID" \
+            | grep -oE '>Version</div><div class="[^"]*">[0-9][0-9.]*<' \
+            | grep -oE '[0-9][0-9.]*' | head -1)
+          PUBLISHED_VER=${PUBLISHED_VER:-none}
           echo "Published version in Chrome Store: $PUBLISHED_VER"
 
           echo "==== 对比版本 ===="
@@ -159,16 +161,20 @@ jobs:
             exit 1
           fi
 
+          echo "==== 获取商店当前审核中/已提交的版本 ===="
           ITEM_INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "x-goog-api-version: 2" \
             "https://www.googleapis.com/chromewebstore/v1.1/items/$EXT_ID?projection=DRAFT")
           DRAFT_VER=$(echo "$ITEM_INFO" | jq -r '.crxVersion // "none"')
           echo "Draft version in Chrome Store: $DRAFT_VER"
 
-          PUB_INFO=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "x-goog-api-version: 2" \
-            "https://www.googleapis.com/chromewebstore/v1.1/items/$EXT_ID?projection=PUBLISHED")
-          PUBLISHED_VER=$(echo "$PUB_INFO" | jq -r '.crxVersion // "none"')
+          echo "==== 获取商店已发布的版本 ===="
+          PUBLISHED_VER=$(curl -sL -H "Accept-Language: en-US,en;q=0.9" \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+            "https://chromewebstore.google.com/detail/$EXT_ID" \
+            | grep -oE '>Version</div><div class="[^"]*">[0-9][0-9.]*<' \
+            | grep -oE '[0-9][0-9.]*' | head -1)
+          PUBLISHED_VER=${PUBLISHED_VER:-none}
           echo "Published version in Chrome Store: $PUBLISHED_VER"
 
           if [ "$UPSTREAM_VER" == "$PUBLISHED_VER" ]; then
