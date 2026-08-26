@@ -270,10 +270,9 @@ jobs:
             !skip { print }
           ' README.md > /tmp/README.new && mv /tmp/README.new README.md
 
-          echo "==== 提交变更（忽略仅时间戳变化）===="
-          if git diff -I '最后检查时间' --quiet README.md; then
-            echo "版本状态无实质变化，跳过提交。"
-            git checkout -- README.md
+          echo "==== 提交变更 ===="
+          if git diff --quiet README.md; then
+            echo "README 无任何变化，跳过提交。"
           else
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
