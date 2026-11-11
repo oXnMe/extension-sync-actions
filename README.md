@@ -16,11 +16,11 @@
 ## 📊 同步状态
 
 <!-- SYNC_STATUS_START -->
-> 🕐 最后检查时间：2026-11-11 05:15 (UTC+8)
+> 🕐 最后检查时间：2026-11-12 05:50 (UTC+8)
 
 | 扩展名称 | 上游版本 | 商店已发布版本 | 商店提交版本 | 状态 |
 | :--- | :--- | :--- | :--- | :--- |
-| [Tree Style History](https://chromewebstore.google.com/detail/khcenbpnhbeplojhaolbpldmoppicold) | `3.3.2` | `3.3.1` | `3.3.2` | 🚀 草稿已补交审核 |
+| [Tree Style History](https://chromewebstore.google.com/detail/khcenbpnhbeplojhaolbpldmoppicold) | `3.3.2` | `3.3.2` | `3.3.2` | ✅ 已发布最新版 |
 | [TabulaBili (初见哔哩)](https://chromewebstore.google.com/detail/hjknablinpkpajdhjboogodgkpggffog) | `1.0` | `1.0` | `1.0` | ✅ 已发布最新版 |
 <!-- SYNC_STATUS_END -->
 
